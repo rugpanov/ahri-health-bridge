@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS steps (
+    id          BIGSERIAL PRIMARY KEY,
+    steps       INTEGER NOT NULL,
+    received_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
