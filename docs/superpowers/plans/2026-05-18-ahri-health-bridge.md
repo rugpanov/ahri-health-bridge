@@ -10,6 +10,27 @@
 
 ---
 
+## Orchestration Model (Linear + Sub-agents)
+
+Tasks 1–7 are tracked in Linear. A **main orchestrator agent** drives the loop:
+
+```
+for each Linear issue in "ahri-health-bridge" project (ordered by number):
+  1. Set issue → In Progress
+  2. Dispatch sub-agent with: task title, full task steps from this plan, repo path
+  3. Sub-agent implements, runs tests, commits — reports back with commit SHA + test output
+  4. Main agent verifies:
+       - git log confirms the expected commit exists
+       - go test ./... passes
+       - changed files match the task's File Map
+  5. If verification passes → set issue → Done, proceed to next
+     If verification fails → leave issue In Progress, report diff to user before continuing
+```
+
+Tasks 1 and 4 have no inter-task dependencies and can be dispatched in parallel. All others must run in order (each task depends on the previous compile succeeding).
+
+---
+
 ## File Map
 
 | File | Responsibility |
@@ -28,11 +49,131 @@
 
 ---
 
+## Task 0: Set up Linear and create project issues
+
+**Files:**
+- Create: `.env.example`
+- Create: `.env` (from `.env.example`, not committed)
+
+This task is run once by a human (or the main orchestrator before dispatching sub-agents). It requires a Linear API key — follow Step 1 to get one if you don't have it.
+
+- [ ] **Step 1: Get a Linear API key**
+
+Go to [linear.app](https://linear.app) → Settings → API → Personal API keys → Create key.
+Copy the key — it is only shown once.
+
+If you do not have a Linear account, create one at [linear.app](https://linear.app) (free tier is sufficient).
+
+- [ ] **Step 2: Create `.env.example` with all config fields**
+
+Create `.env.example` in `tools/ahri-health-bridge/`:
+
+```
+PORT=8080
+API_KEY=change-me
+LOG_FILE=payloads.json
+LINEAR_API_KEY=your-linear-api-key
+```
+
+Copy it to `.env` and fill in real values:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env`: set `API_KEY` to a random secret and `LINEAR_API_KEY` to the key from Step 1.
+
+- [ ] **Step 3: Find your team ID**
+
+```bash
+curl -s -X POST https://api.linear.app/graphql \
+  -H "Authorization: Bearer $(grep LINEAR_API_KEY .env | cut -d= -f2)" \
+  -H "Content-Type: application/json" \
+  -d '{"query":"{ teams { nodes { id name } } }"}' | jq '.data.teams.nodes'
+```
+
+Expected: JSON array of teams. Note the `id` of the team you want to use (e.g. `"abc123"`).
+If there are no teams, go to Linear → Settings → Workspace → Create team first.
+
+- [ ] **Step 4: Get workflow state IDs for that team**
+
+Replace `TEAM_ID` with the id from Step 3:
+
+```bash
+curl -s -X POST https://api.linear.app/graphql \
+  -H "Authorization: Bearer $(grep LINEAR_API_KEY .env | cut -d= -f2)" \
+  -H "Content-Type: application/json" \
+  -d '{"query":"{ workflowStates(filter: { team: { id: { eq: \"TEAM_ID\" } } }) { nodes { id name } } }"}' \
+  | jq '.data.workflowStates.nodes'
+```
+
+Expected: states like `Todo`, `In Progress`, `Done`. Note the `id` for `Todo`.
+
+- [ ] **Step 5: Create the project**
+
+Replace `TEAM_ID`:
+
+```bash
+curl -s -X POST https://api.linear.app/graphql \
+  -H "Authorization: Bearer $(grep LINEAR_API_KEY .env | cut -d= -f2)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "mutation { createProject(input: { name: \"ahri-health-bridge\", teamIds: [\"TEAM_ID\"] }) { project { id name } } }"
+  }' | jq '.data.createProject.project'
+```
+
+Note the returned `id` — this is your `PROJECT_ID`.
+
+- [ ] **Step 6: Create issues for Tasks 1–7**
+
+Run once per task. Replace `TEAM_ID`, `PROJECT_ID`, and `TODO_STATE_ID` throughout.
+
+```bash
+LINEAR_API_KEY=$(grep LINEAR_API_KEY .env | cut -d= -f2)
+TEAM_ID="your-team-id"
+PROJECT_ID="your-project-id"
+TODO_STATE_ID="your-todo-state-id"
+
+create_issue() {
+  local title="$1"
+  local description="$2"
+  curl -s -X POST https://api.linear.app/graphql \
+    -H "Authorization: Bearer $LINEAR_API_KEY" \
+    -H "Content-Type: application/json" \
+    -d "{\"query\": \"mutation { createIssue(input: { teamId: \\\"$TEAM_ID\\\", projectId: \\\"$PROJECT_ID\\\", stateId: \\\"$TODO_STATE_ID\\\", title: \\\"$title\\\", description: \\\"$description\\\" }) { issue { id title } } }\"}" \
+    | jq '.data.createIssue.issue'
+}
+
+create_issue "Task 1: Initialise Go module and install dependencies" "go mod init, install chi + godotenv, create .env.example. See plan Task 1."
+create_issue "Task 2: Auth middleware" "X-API-Key middleware in utils/auth.go with tests. See plan Task 2."
+create_issue "Task 3: Logger gateway" "stdout + file logger in gateways/logger.go with tests. See plan Task 3."
+create_issue "Task 4: DB gateway stub" "HealthStore interface + NoopStore in gateways/db.go. See plan Task 4."
+create_issue "Task 5: Steps controller" "StepsController in controllers/steps.go with tests. See plan Task 5."
+create_issue "Task 6: Steps handler" "StepsHandler in handlers/steps.go with tests. See plan Task 6."
+create_issue "Task 7: Wire up main.go and smoke test" "Assemble all components in main.go, run all tests, smoke test with curl. See plan Task 7."
+```
+
+Expected: 7 JSON objects printed, each with an `id` and `title`.
+
+- [ ] **Step 7: Verify issues in Linear UI**
+
+Open [linear.app](https://linear.app) and confirm 7 issues appear in the `ahri-health-bridge` project with status `Todo`.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add .env.example
+git commit -m "chore: add Linear setup and project issues for ahri-health-bridge"
+```
+
+---
+
 ## Task 1: Initialise Go module and install dependencies
 
 **Files:**
 - Create: `go.mod`
-- Create: `.env.example`
+
+Prerequisite: Task 0 must be complete (`.env.example` and `.env` already exist).
 
 - [ ] **Step 1: Initialise module**
 
@@ -52,26 +193,10 @@ go get github.com/joho/godotenv
 
 Expected: `go.sum` created, dependencies appear in `go.mod`
 
-- [ ] **Step 3: Create `.env.example`**
-
-```
-PORT=8080
-API_KEY=change-me
-LOG_FILE=payloads.json
-```
-
-Save as `.env.example`. Also copy it to `.env` for local use:
+- [ ] **Step 3: Commit**
 
 ```bash
-cp .env.example .env
-```
-
-Edit `.env` and set a real `API_KEY` value.
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add go.mod go.sum .env.example
+git add go.mod go.sum
 git commit -m "chore: initialise Go module for ahri-health-bridge"
 ```
 
