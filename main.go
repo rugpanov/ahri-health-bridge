@@ -68,6 +68,7 @@ func main() {
 	stepsHandler := handlers.NewStepsHandler(stepsCtrl)
 
 	r := chi.NewRouter()
+	r.Use(utils.CORSMiddleware)
 	r.Use(utils.APIKeyMiddleware(apiKey))
 	r.Post("/health/steps", stepsHandler.ServeHTTP)
 	r.Get("/health/steps/daily", stepsHandler.GetByDayServeHTTP)
