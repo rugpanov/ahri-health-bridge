@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/rugpanov/ahri-health-bridge/controllers"
 	"github.com/rugpanov/ahri-health-bridge/utils"
@@ -20,13 +21,51 @@ func (m *mockLogger) Log(source string, body []byte) {
 }
 
 type mockStore struct {
-	steps int
-	err   error
+	steps    int
+	err      error
+	daily    []controllers.DailyStepsRecord
+	dailyErr error
 }
 
 func (m *mockStore) StoreSteps(_ context.Context, steps int) error {
 	m.steps = steps
 	return m.err
+}
+
+func (m *mockStore) GetStepsByDay(_ context.Context) ([]controllers.DailyStepsRecord, error) {
+	return m.daily, m.dailyErr
+}
+
+func TestStepsController_GetByDay(t *testing.T) {
+	date := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
+	store := &mockStore{daily: []controllers.DailyStepsRecord{{Date: date, Steps: 8000}}}
+	ctrl := controllers.NewStepsController(&mockLogger{}, store)
+
+	results, err := ctrl.GetByDay(context.Background())
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0].Date != "2026-01-15" {
+		t.Errorf("expected date '2026-01-15', got '%s'", results[0].Date)
+	}
+	if results[0].Steps != 8000 {
+		t.Errorf("expected 8000 steps, got %d", results[0].Steps)
+	}
+}
+
+func TestStepsController_GetByDay_StoreError(t *testing.T) {
+	store := &mockStore{dailyErr: errors.New("db down")}
+	ctrl := controllers.NewStepsController(&mockLogger{}, store)
+
+	_, err := ctrl.GetByDay(context.Background())
+
+	if err == nil {
+		t.Error("expected error when store fails")
+	}
 }
 
 func TestStepsController_Handle_CallsLoggerAndStore(t *testing.T) {

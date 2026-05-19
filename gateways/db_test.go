@@ -22,3 +22,14 @@ func TestNoopStore_StoreSteps_Zero(t *testing.T) {
 		t.Errorf("expected no error for zero steps, got: %v", err)
 	}
 }
+
+func TestNoopStore_GetStepsByDay(t *testing.T) {
+	store := &gateways.NoopStore{}
+	rows, err := store.GetStepsByDay(context.Background())
+	if err != nil {
+		t.Errorf("expected no error, got: %v", err)
+	}
+	if rows != nil {
+		t.Errorf("expected nil rows, got: %v", rows)
+	}
+}
