@@ -1,13 +1,16 @@
 package handlers
 
 import (
+	"context"
+	"errors"
 	"io"
 	"net/http"
+
+	"github.com/rugpanov/ahri-health-bridge/utils"
 )
 
-// StepsControllerI is the controller interface required by the steps handler.
 type StepsControllerI interface {
-	Handle(body []byte) error
+	Handle(ctx context.Context, body []byte) error
 }
 
 type StepsHandler struct {
@@ -26,7 +29,11 @@ func (h *StepsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	if err := h.controller.Handle(body); err != nil {
+	if err := h.controller.Handle(r.Context(), body); err != nil {
+		if errors.Is(err, utils.ErrBadRequest) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
