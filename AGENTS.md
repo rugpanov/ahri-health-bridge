@@ -49,6 +49,10 @@ LINEAR_API_KEY=<key>
 
 To add a new parameter (e.g. sleep): add migration, `handlers/sleep.go`, `controllers/sleep.go`, `StoreSleep` in `gateways/db.go`, one route in `main.go`.
 
+## Git operations
+
+See the [top-level AGENTS.md](../../AGENTS.md) for guidance on git pull/push, including SSH key troubleshooting.
+
 ## Conventions
 
 - British spelling · no global state · interfaces in consumer packages · `.env` never committed
