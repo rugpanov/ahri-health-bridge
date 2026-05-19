@@ -8,19 +8,80 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/rugpanov/ahri-health-bridge/controllers"
 	"github.com/rugpanov/ahri-health-bridge/handlers"
 	"github.com/rugpanov/ahri-health-bridge/utils"
 )
 
 type mockController struct {
-	body []byte
-	err  error
+	body     []byte
+	err      error
+	daily    []controllers.DailyStepsResult
+	dailyErr error
 }
 
 func (m *mockController) Handle(_ context.Context, body []byte) error {
 	m.body = body
 	return m.err
+}
+
+func (m *mockController) GetByDay(_ context.Context) ([]controllers.DailyStepsResult, error) {
+	return m.daily, m.dailyErr
+}
+
+func TestStepsHandler_GetByDay_Success(t *testing.T) {
+	date := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
+	_ = date
+	mock := &mockController{daily: []controllers.DailyStepsResult{
+		{Date: "2026-01-15", Steps: 8000},
+	}}
+	h := handlers.NewStepsHandler(mock)
+
+	req := httptest.NewRequest(http.MethodGet, "/health/steps/daily", nil)
+	rr := httptest.NewRecorder()
+
+	h.GetByDayServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rr.Code)
+	}
+	want := `[{"date":"2026-01-15","steps":8000}]` + "\n"
+	if rr.Body.String() != want {
+		t.Errorf("unexpected body: %s", rr.Body.String())
+	}
+}
+
+func TestStepsHandler_GetByDay_Empty(t *testing.T) {
+	mock := &mockController{daily: nil}
+	h := handlers.NewStepsHandler(mock)
+
+	req := httptest.NewRequest(http.MethodGet, "/health/steps/daily", nil)
+	rr := httptest.NewRecorder()
+
+	h.GetByDayServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rr.Code)
+	}
+	if rr.Body.String() != "[]\n" {
+		t.Errorf("expected empty array, got: %s", rr.Body.String())
+	}
+}
+
+func TestStepsHandler_GetByDay_StoreError(t *testing.T) {
+	mock := &mockController{dailyErr: errors.New("db down")}
+	h := handlers.NewStepsHandler(mock)
+
+	req := httptest.NewRequest(http.MethodGet, "/health/steps/daily", nil)
+	rr := httptest.NewRecorder()
+
+	h.GetByDayServeHTTP(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500, got %d", rr.Code)
+	}
 }
 
 func TestStepsHandler_Success(t *testing.T) {

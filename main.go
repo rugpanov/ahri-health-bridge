@@ -70,6 +70,7 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(utils.APIKeyMiddleware(apiKey))
 	r.Post("/health/steps", stepsHandler.ServeHTTP)
+	r.Get("/health/steps/daily", stepsHandler.GetByDayServeHTTP)
 
 	fmt.Printf("ahri-health-bridge listening on :%s\n", port)
 	if err := http.ListenAndServe(":"+port, r); err != nil {
