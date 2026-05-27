@@ -34,8 +34,8 @@ func (c *CachedStore) StoreSteps(ctx context.Context, steps int) error {
 	if err := c.inner.StoreSteps(ctx, steps); err != nil {
 		return err
 	}
-	today := time.Now().UTC().Format("2006-01-02")
-	todayTime, _ := time.Parse("2006-01-02", today)
+	now := time.Now().UTC()
+	today := now.Format("2006-01-02")
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for i, r := range c.cache {
@@ -44,6 +44,6 @@ func (c *CachedStore) StoreSteps(ctx context.Context, steps int) error {
 			return nil
 		}
 	}
-	c.cache = append(c.cache, controllers.DailyStepsRecord{Date: todayTime, Steps: steps})
+	c.cache = append(c.cache, controllers.DailyStepsRecord{Date: time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC), Steps: steps})
 	return nil
 }
