@@ -36,7 +36,7 @@ func (s *NeonStore) StoreSteps(ctx context.Context, steps int) error {
 
 func (s *NeonStore) GetStepsByDay(ctx context.Context) ([]controllers.DailyStepsRecord, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT DATE(received_at) AS day, MAX(steps) AS total_steps
+		SELECT DATE(received_at) AS day, SUM(steps) AS total_steps
 		FROM steps
 		GROUP BY day
 		ORDER BY day ASC
