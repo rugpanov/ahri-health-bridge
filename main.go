@@ -54,9 +54,13 @@ func main() {
 	}
 
 	ctx := context.Background()
-	store, err := gateways.NewNeonStore(ctx, databaseURL)
+	neon, err := gateways.NewNeonStore(ctx, databaseURL)
 	if err != nil {
 		log.Fatalf("error creating store: %v", err)
+	}
+	store, err := gateways.NewCachedStore(ctx, neon)
+	if err != nil {
+		log.Fatalf("error creating cache: %v", err)
 	}
 
 	logger, err := gateways.NewLogger(logFile)
