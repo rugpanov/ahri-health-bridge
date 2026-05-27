@@ -34,6 +34,7 @@ func (c *CachedStore) StoreSteps(ctx context.Context, steps int) error {
 	if err := c.inner.StoreSteps(ctx, steps); err != nil {
 		return err
 	}
+	// UTC matches DATE(received_at) in the DB query, which assumes Neon's session timezone is UTC.
 	now := time.Now().UTC()
 	today := now.Format("2006-01-02")
 	c.mu.Lock()
